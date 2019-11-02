@@ -8,11 +8,22 @@
     we live in tweetspace and your description wants to look good in the snap
     store.
 
+  base: core18
   grade: devel # must be 'stable' to release into candidate/stable channels
-  confinement: devmode # use 'strict' once you have the right plugs and slots
+  confinement: strict # use 'strict' once you have the right plugs and slots
 
   parts:
-    my-part:
-      # See 'snapcraft plugins'
-      plugin: nil
-  
+    lfgss-photo-poll:
+      source: .
+      plugin: ruby
+      ruby-version: '2.6.3'
+      override-build: bundle install
+      # use-bundler: true
+
+  apps:
+    lfgss-photo-poll:
+      environment:
+        RUBYLIB: $SNAP/usr/lib/ruby/2.6.0:$SNAP/usr/lib/x86_64-linux-gnu/ruby/2.6.0
+        GEM_HOME: $SNAP/gems
+        GEM_PATH: $SNAP
+      command: ruby $SNAP/lfgss.rb
