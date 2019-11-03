@@ -1,18 +1,24 @@
-require 'nokogiri'
-require 'open-uri'
 require 'yaml'
 require 'optparse'
 require 'mechanize'
 require 'pushover'
+require 'json'
 
-per_page = 25
-scanning = true
+["PUSHOVER_USER", "PUSHOVER_TOKEN", "LFGSS_TOKEN"].reject do |k|
+	ENV.key? k
+end.tap do |missing|
+	warn "Missing environment variables: #{missing}" if missing.any?
+end
+
 yaml_file = "lfgss.yaml"
 rewind = false
 no_save = false
 upload = false
+user_agent = 'LFGSSBot (cyclotron3k)'
 
-# https://lfgss.microco.sm/api/v1/conversations/282005?limit=100&offset=7800
+# `snapctl get username`
+# `snapctl get password`
+# `snapctl get conversation_id`
 
 OptionParser.new do |opts|
 	opts.banner = "Usage: lfgss.rb [options]"
@@ -41,44 +47,77 @@ store = if File.exist?(yaml_file)
 else
 	{
 		tags: ['#calm'],
-		page: [6250],
+		last_post_id: [12345],
+		offset: [7100],
 	}
 end
 
-posts = []
-page = if rewind
+last_post_id, offset = if rewind
 	store[:tags].pop
-	store[:page].pop
+	[
+		store[:last_post_id].pop,
+		store[:offset].pop,
+	]
 else
-	store[:page].last
+	[
+		store[:last_post_id].last,
+		store[:offset].last,
+	]
 end
 
-while scanning do
-	puts "Getting page #{page}"
-	doc = Nokogiri::HTML(open "https://www.lfgss.com/conversations/282005/?offset=#{page}")
-	comments = doc.css("div.main div.content-body ul.list-comments > li.comment-item")
-	posts += comments.map do |comment|
-		header = comment.at_css("div.comment-item-header")
-		body = comment.at_css("div.comment-item-body")
+posts = []
+limit = 100
+conversation_id = 282005
 
-		{
-			author: header.at_css('div.comment-item-author strong').text,
-			permalink: header.at_css('div.comment-item-permalink a')['href'],
-			links: body.css('a[href^="/comments/"]').map { |lnk| lnk['href'] },
-			text: body.text,
-			tags: body.css('a[href^="/search/?q=%23"]').map(&:text).map(&:downcase),
-			images: body.css('img').map { |img| img['src'] }
-		}
+uri = URI("https://lfgss.microco.sm/api/v1/conversations/#{conversation_id}")
+Net::HTTP.start(uri.host, uri.port, use_ssl: true) do |http|
+	run = true
+	while run
+		uri.query = URI.encode_www_form limit: limit, offset: offset
+		request = Net::HTTP::Get.new uri, 'User-Agent' => user_agent
+		puts uri
 
-	end
+		response = http.request request # Net::HTTPResponse object
+		run = if response.is_a?(Net::HTTPSuccess)
+			data = JSON.parse response.body
 
-	if comments.count == per_page
-		page += 25
-	else
-		scanning = false
+			posts += data.dig("data", "comments", "items").select do |post|
+				if post["id"] > last_post_id
+					last_post_id = post["id"]
+					true
+				else
+					false
+				end
+			end
+
+			if data.dig("data", "comments", "maxOffset") >= offset + limit
+				offset += limit
+				true
+			else
+				false
+			end
+
+		else
+			puts "\e[31m#{response.body}\e[0m"
+			raise "#{response.class} #{response.body}"
+			false
+		end
+
 	end
 end
-store[:page] << page
+
+posts.map! do |post|
+	{
+		author: post.dig("meta", "createdBy", "profileName"),
+		permalink: "/comments/#{post['id']}/",
+		links: post["markdown"].scan(/\/comments\/\d{6,8}\//).count,
+		text: post["markdown"],
+		tags: post["markdown"].scan(/#\w+/).map(&:downcase).uniq,
+		images: (post["attachments"] || 0 ) + post["html"].scan(/<img [^>]*src="[^"]*\.(?:tiff|png|jpe?g)"/i).count
+	}
+end
+
+store[:offset] << offset
 
 new_tags = posts.flat_map { |x| x[:tags] }.each_with_object(Hash.new 0) { |x, h| h[x] += 1 }
 store[:tags].each { |x| new_tags.delete x }
@@ -95,14 +134,14 @@ collector = []
 flawless = true
 posts.each do |post|
 
-	if post[:links].count > 4 and collector.count > 0
+	if post[:links] > 4 and collector.count > 0
 		puts "\e[31mVoting may have already started\e[0m"
 		flawless = false
 	end
 
-	next unless post[:images].count > 0
+	next unless post[:images] > 0
 
-	title = post[:text].lines.map(&:strip).reject(&:empty?).grep_v(/^\d+ Attachment$/).grep_v(current_tag).sort_by { |x| x.split.count }.first
+	title = post[:text].lines.map(&:strip).reject(&:empty?).grep_v(current_tag).sort_by { |x| x.split.count }.first
 	if title
 		title = " - " + title.gsub(/#{current_tag}/i, current_tag[1..-1])
 	end
@@ -133,7 +172,7 @@ if upload and flawless and collector.size > 0
 
 	puts "\e[34mPosting text to LFGSS\e[0m"
 	agent = Mechanize.new do |agent|
-		agent.user_agent = 'LFGSSBot (cyclotron3k)'
+		agent.user_agent = user_agent
 		agent.cookie_jar << Mechanize::Cookie.new(
 			domain: 'www.lfgss.com',
 			name: 'access_token',
@@ -143,7 +182,7 @@ if upload and flawless and collector.size > 0
 		)
 	end
 
-	page = agent.get('https://www.lfgss.com/conversations/282005/newest/')
+	page = agent.get('https://www.lfgss.com/conversations/#{conversation_id}/newest/')
 	# page = agent.get('https://www.lfgss.com/conversations/253639/newest/') # test page
 	form = page.form_with(action: "/comments/create/")
 	form.markdown = "#{current_tag}\n\n" + collector.join("\n")
@@ -170,6 +209,7 @@ elsif upload and !flawless
 end
 
 store[:tags] << current_tag
+store[:last_post_id] << last_post_id
 
 unless no_save
 	File.open(yaml_file, 'w') do |file|
