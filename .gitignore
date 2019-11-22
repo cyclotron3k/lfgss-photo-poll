@@ -2,14 +2,14 @@
 *.rbc
 /.config
 /coverage/
+/env_file
 /InstalledFiles
 /pkg/
-/spec/reports/
 /spec/examples.txt
+/spec/reports/
 /test/tmp/
 /test/version_tmp/
 /tmp/
-
 # Used by dotenv library to load environment variables.
 # .env
 
