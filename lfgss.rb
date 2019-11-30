@@ -136,7 +136,7 @@ class LfgssPhotoPoll
 
 			next unless post[:images] > 0
 
-			title = post[:text].gsub(/\[img\].*?\[\/img\]/i, '').lines.map(&:strip).reject(&:empty?).grep_v(current_tag).sort_by { |x| x.split.count }.first
+			title = post[:text].gsub(/\[img\].*?\[\/img\]/i, '').lines.map(&:strip).reject(&:empty?).grep_v(/\A#{current_tag}\z/i).sort_by { |x| x.split.count }.first
 			if title
 				title = " - " + title.gsub(/#{current_tag}/i, current_tag[1..-1])
 			end
