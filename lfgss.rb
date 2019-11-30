@@ -163,14 +163,22 @@ class LfgssPhotoPoll
 
 		end
 
+		if flawless
+			post_to_lfgss(collector)
+		elsif upload
+			puts "\e[31mRefusing to upload to LFGSS\e[0m"
+
+			pushover 'Failed to post message to LFGSS',	priority: 1
+		end
+
 		save_store
 
 		flawless
 	end
 
-	def upload
+	def post_to_lfgss(collector)
 
-		if @upload and flawless and collector.size > 0
+		if upload and collector.size > 0
 
 			puts "\e[34mPosting text to LFGSS\e[0m"
 			agent = Mechanize.new do |agent|
@@ -194,11 +202,6 @@ class LfgssPhotoPoll
 
 			puts "\e[33mDone"
 
-		elsif
-			@upload and !flawless
-			puts "\e[31mRefusing to upload to LFGSS\e[0m"
-
-			pushover 'Failed to post message to LFGSS',	priority: 1
 		end
 
 	end
