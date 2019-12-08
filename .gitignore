@@ -3,6 +3,8 @@
 /.config
 /coverage/
 /env_file
+/lfgss.yaml
+/lfgss.log
 /InstalledFiles
 /pkg/
 /spec/examples.txt

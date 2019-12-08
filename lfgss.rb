@@ -1,5 +1,6 @@
 require 'yaml'
 require 'optparse'
+require 'nokogiri'
 require 'mechanize'
 require 'pushover'
 require 'json'
@@ -101,13 +102,16 @@ class LfgssPhotoPoll
 
 	def parsed_posts
 		@parsed_posts ||= new_comments.map do |post|
+
+			doc = Nokogiri::HTML post["html"]
+
 			{
 				author: post.dig("meta", "createdBy", "profileName"),
 				permalink: "/comments/#{post['id']}/",
-				links: post["markdown"].scan(/\/comments\/\d{6,8}\//).count,
-				text: post["markdown"],
+				links: doc.css('a[href^="/comments/"]').count,
+				text: doc.text,
 				tags: post["markdown"].scan(/#\w+/).map(&:downcase).uniq,
-				images: (post["attachments"] || 0 ) + post["html"].scan(/<img [^>]*src="[^"]*\.(?:tiff|png|jpe?g)"/i).count
+				images: (post["attachments"] || 0 ) + doc.css('img').count
 			}
 		end
 	end
@@ -136,7 +140,7 @@ class LfgssPhotoPoll
 
 			next unless post[:images] > 0
 
-			title = post[:text].gsub(/\[img\].*?\[\/img\]/i, '').lines.map(&:strip).reject(&:empty?).grep_v(/\A#{current_tag}\z/i).sort_by { |x| x.split.count }.first
+			title = post[:text].lines.map(&:strip).reject(&:empty?).grep_v(/\A#{current_tag}\z/i).sort_by { |x| x.split.count }.first
 			if title
 				title = " - " + title.gsub(/#{current_tag}/i, current_tag[1..-1])
 			end
@@ -192,7 +196,7 @@ class LfgssPhotoPoll
 				)
 			end
 
-			page = agent.get('https://www.lfgss.com/conversations/#{conversation_id}/newest/')
+			page = agent.get("https://www.lfgss.com/conversations/#{conversation_id}/newest/")
 			# page = agent.get('https://www.lfgss.com/conversations/253639/newest/') # test page
 			form = page.form_with(action: "/comments/create/")
 			form.markdown = "#{current_tag}\n\n" + collector.join("\n")
