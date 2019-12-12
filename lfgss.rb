@@ -73,7 +73,8 @@ class LfgssPhotoPoll
 	end
 
 	def new_comments
-		posts = []
+		return @new_comments if @new_comments
+		@new_comments = []
 		uri = URI("https://lfgss.microco.sm/api/v1/conversations/#{conversation_id}")
 		Net::HTTP.start(uri.host, uri.port, use_ssl: true) do |http|
 			run = true
@@ -86,8 +87,8 @@ class LfgssPhotoPoll
 				raise "#{response.class} #{response.body}" unless response.is_a? Net::HTTPSuccess
 				data = JSON.parse response.body
 
-				posts += data.dig("data", "comments", "items").select { |x| x["id"] > last_post_id }
-				self.last_post_id = posts.last["id"] if posts.any?
+				@new_comments += data.dig("data", "comments", "items").select { |x| x["id"] > last_post_id }
+				self.last_post_id = @new_comments.last["id"] if @new_comments.any?
 
 				run = if data.dig("data", "comments", "maxOffset") >= offset + limit
 					self.offset += limit
@@ -97,23 +98,24 @@ class LfgssPhotoPoll
 				end
 			end
 		end
-		posts
+		@new_comments
 	end
 
 	def parsed_posts
-		@parsed_posts ||= new_comments.map do |post|
+		@parsed_posts ||= new_comments.map { |post| parse_post post }
+	end
 
-			doc = Nokogiri::HTML post["html"]
+	def parse_post(post)
+		doc = Nokogiri::HTML post['html']
 
-			{
-				author: post.dig("meta", "createdBy", "profileName"),
-				permalink: "/comments/#{post['id']}/",
-				links: doc.css('a[href^="/comments/"]').count,
-				text: doc.text,
-				tags: post["markdown"].scan(/#\w+/).map(&:downcase).uniq,
-				images: (post["attachments"] || 0 ) + doc.css('img').count
-			}
-		end
+		{
+			author: post.dig('meta', 'createdBy', 'profileName'),
+			permalink: "/comments/#{post['id']}/",
+			links: doc.css('a[href^="/comments/"]').count,
+			text: doc.text,
+			tags: post['markdown'].scan(/#\w+/).map(&:downcase).uniq,
+			images: (post['attachments'] || 0 ) + doc.css('img').count
+		}
 	end
 
 	def current_tag
@@ -129,11 +131,11 @@ class LfgssPhotoPoll
 	end
 
 	def process_posts
-		collector = []
+		@collector = []
 		flawless = true
 		parsed_posts.each do |post|
 
-			if post[:links] > 4 and collector.count > 0
+			if post[:links] > 4 and @collector.count > 0
 				puts "\e[31mVoting may have already started\e[0m"
 				flawless = false
 			end
@@ -150,10 +152,10 @@ class LfgssPhotoPoll
 				puts "\e[90mhttps://www.lfgss.com#{post[:permalink]}\e[0m"
 				# flawless = false
 			elsif post[:tags].include?(current_tag)
-				collector << "#{post[:author]}#{title} ()"
-				puts collector.last
-				collector << "https://www.lfgss.com#{post[:permalink]}"
-				puts collector.last
+				@collector << "#{post[:author]}#{title} ()"
+				puts @collector.last
+				@collector << "https://www.lfgss.com#{post[:permalink]}"
+				puts @collector.last
 			elsif (post[:tags] - store[:tags]).count == 0
 				# do nothing - it's related to a previous tag
 				# puts "\e[33mIgnoring post with #{post[:tags]}\e[0m"
@@ -168,7 +170,7 @@ class LfgssPhotoPoll
 		end
 
 		if flawless
-			post_to_lfgss(collector)
+			post_to_lfgss
 		elsif upload
 			puts "\e[31mRefusing to upload to LFGSS\e[0m"
 
@@ -180,9 +182,9 @@ class LfgssPhotoPoll
 		flawless
 	end
 
-	def post_to_lfgss(collector)
+	def post_to_lfgss
 
-		if upload and collector.size > 0
+		if upload and @collector.size > 0
 
 			puts "\e[34mPosting text to LFGSS\e[0m"
 			agent = Mechanize.new do |agent|
@@ -198,8 +200,8 @@ class LfgssPhotoPoll
 
 			page = agent.get("https://www.lfgss.com/conversations/#{conversation_id}/newest/")
 			# page = agent.get('https://www.lfgss.com/conversations/253639/newest/') # test page
-			form = page.form_with(action: "/comments/create/")
-			form.markdown = "#{current_tag}\n\n" + collector.join("\n")
+			form = page.form_with(action: '/comments/create/')
+			form.markdown = "#{current_tag}\n\n" + @collector.join("\n")
 			page = agent.submit form
 
 			pushover 'Message posted to LFGSS ok'
