@@ -1,15 +1,8 @@
-# ruby -Ilib:test test/minitest/test_minitest_test.rb
-require 'minitest/autorun'
-require 'webmock/minitest'
-require 'json'
+require 'test_helper'
 
-require_relative './lfgss'
-
-class TestLfgssPhotoPoll < Minitest::Test
+class LfgssPhotoPollTest < Minitest::Test
 	def setup
-		@client = LfgssPhotoPoll.new
-		@client.instance_variable_set :@yaml_file, './fixtures/test.yaml'
-		@client.instance_variable_set :@no_save, true
+		@client = LfgssPhotoPoll.new no_save: true, yaml_file: './test/fixtures/test.yaml'
 	end
 
 	def stub_api_request(conversation, limit, offset)
@@ -21,7 +14,7 @@ class TestLfgssPhotoPoll < Minitest::Test
 			headers: {
 				'Content-Type' => 'application/json',
 			},
-			body: File.new("./fixtures/#{conversation}-#{limit}-#{offset}.json"),
+			body: File.new("./test/fixtures/#{conversation}-#{limit}-#{offset}.json"),
 		)
 	end
 

@@ -5,50 +5,37 @@ require 'mechanize'
 require 'pushover'
 require 'json'
 
+require 'lfgss_photo_poll/version'
+
 class LfgssPhotoPoll
 
 	attr_reader :rewind, :no_save, :upload, :user_agent, :limit, :conversation_id, :yaml_file
 	attr_writer :offset, :last_post_id
 
-	def initialize
-		["PUSHOVER_USER", "PUSHOVER_TOKEN", "LFGSS_TOKEN"].reject do |k|
-			ENV.key? k
-		end.tap do |missing|
-			warn "Missing environment variables: #{missing}" if missing.any?
-		end
+	def initialize(
+		rewind: false,
+		no_save: false,
+		upload: false,
+		yaml_file: 'lfgss.yaml',
+		pushover_user: ENV['PUSHOVER_USER'],
+		pushover_token: ENV['PUSHOVER_TOKEN'],
+		lfgss_token: ENV['LFGSS_TOKEN']
+	)
 
-		@yaml_file = "lfgss.yaml"
-		@rewind = false
-		@no_save = false
-		@upload = false
+		@rewind         = rewind
+		@no_save        = no_save
+		@upload         = upload
+		@yaml_file      = yaml_file
+		@pushover_user  = pushover_user
+		@pushover_token = pushover_token
+		@lfgss_token    = lfgss_token
+
 		@user_agent = 'LFGSSBot (cyclotron3k)'
 		@limit = 100
 		@conversation_id = 282005
 
-		# `snapctl get username`
-		# `snapctl get password`
-		# `snapctl get conversation_id`
-
-		OptionParser.new do |opts|
-			opts.banner = "Usage: lfgss.rb [options]"
-
-			opts.on("-?", "--help", "Prints this help") do
-				puts opts
-				exit
-			end
-
-			opts.on("-r", "--rewind", "Rewind to the previous state") do
-				@rewind = true
-			end
-
-			opts.on("-n", "--no-save", "Don't save any changes") do
-				@no_save = true
-			end
-
-			opts.on("-p", "--post", "Automatically post the output") do
-				@upload = true
-			end
-		end.parse!
+		@new_comments = nil
+		@current_tag = nil
 	end
 
 	def store
@@ -56,6 +43,7 @@ class LfgssPhotoPoll
 			YAML.load_file yaml_file
 		else
 			# bootstrap
+			puts "YAML file #{@yaml_file} missing"
 			{
 				tags: ['#calm'],
 				last_post_id: [12345],
@@ -187,12 +175,12 @@ class LfgssPhotoPoll
 		if upload and @collector.size > 0
 
 			puts "\e[34mPosting text to LFGSS\e[0m"
-			agent = Mechanize.new do |agent|
-				agent.user_agent = user_agent
-				agent.cookie_jar << Mechanize::Cookie.new(
+			agent = Mechanize.new do |a|
+				a.user_agent = user_agent
+				a.cookie_jar << Mechanize::Cookie.new(
 					domain: 'www.lfgss.com',
 					name: 'access_token',
-					value: ENV['LFGSS_TOKEN'],
+					value: @lfgss_token,
 					path: '/',
 					expires: (Date.today + 100).to_s,
 				)
@@ -213,9 +201,9 @@ class LfgssPhotoPoll
 	end
 
 	def save_store
-		store[:offset] << offset
-		store[:tags] << current_tag
-		store[:last_post_id] << last_post_id
+		store[:offset] = (store[:offset] | [offset]).compact
+		store[:tags] = (store[:tags] | [current_tag]).compact
+		store[:last_post_id] = (store[:last_post_id] | [last_post_id]).compact
 
 		unless no_save
 			File.open(yaml_file, 'w') do |file|
@@ -227,20 +215,11 @@ class LfgssPhotoPoll
 
 	def pushover(message, priority: 0)
 		raise if Pushover::Message.create(
-			user: ENV['PUSHOVER_USER'],
-			token: ENV['PUSHOVER_TOKEN'],
+			user: @pushover_user,
+			token: @pushover_token,
 			message: message,
 			priority: priority,
 		).push.status != 1
 	end
 
-	def self.run
-		instance = self.new
-		flawless = instance.process_posts
-
-		exit flawless ? 0 : 1
-	end
-
 end
-
-LfgssPhotoPoll.run
