@@ -25,10 +25,6 @@ class LfgssPhotoPoll
 		@limit = 100
 		@conversation_id = 282005
 
-		# `snapctl get username`
-		# `snapctl get password`
-		# `snapctl get conversation_id`
-
 		OptionParser.new do |opts|
 			opts.banner = "Usage: lfgss.rb [options]"
 
@@ -121,7 +117,9 @@ class LfgssPhotoPoll
 		new_tags = parsed_posts.flat_map { |x| x[:tags] }.each_with_object(Hash.new 0) { |x, h| h[x] += 1 }
 		store[:tags].each { |x| new_tags.delete x }
 
-		return nil if new_tags.empty?
+		if new_tags.empty?
+			raise "New tag not identified"
+		end
 
 		@current_tag = new_tags.max_by { |_, v| v }.first
 		puts "Identified current tag: #{current_tag}"
