@@ -1,15 +1,13 @@
 /env_file
 /lfgss.yaml
 /lfgss.log
-
-## Documentation cache and generated files:
-/.yardoc/
-/_yardoc/
-/doc/
-/rdoc/
-
-## Environment normalization:
 /.bundle/
 /vendor/bundle
-/lib/bundler/man/
-
+/.yardoc
+/_yardoc/
+/coverage/
+/doc/
+/spec/reports/
+/tmp/
+/Gemfile.lock
+/lfgss_photo_poll-*.gem

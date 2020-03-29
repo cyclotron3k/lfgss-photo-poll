@@ -1,9 +1,7 @@
-# frozen_string_literal: true
-
 source "https://rubygems.org"
 
-git_source(:github) { |repo_name| "https://github.com/#{repo_name}" }
+# Specify your gem's dependencies in lfgss_photo_poll.gemspec
+gemspec
 
-gem 'nokogiri'
-gem 'mechanize'
-gem 'pushover'
+gem "rake", "~> 12.0"
+gem "minitest", "~> 5.0"

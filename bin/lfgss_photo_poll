@@ -1,0 +1,49 @@
+#!/usr/bin/env ruby
+
+require 'bundler/setup'
+require 'lfgss_photo_poll'
+
+config = {
+	rewind:    false,
+	no_save:   false,
+	upload:    false,
+	yaml_file: nil,
+}
+
+OptionParser.new do |opts|
+	opts.banner = 'Usage: lfgss_photo_poll [options]'
+
+	opts.on('-?', '--help', 'Prints this help') do
+		puts opts
+		exit
+	end
+
+	opts.on('-r', '--rewind', 'Rewind to the previous state') do
+		config[:rewind] = true
+	end
+
+	opts.on('-n', '--save', 'Don\'t save any changes') do
+		config[:no_save] = true
+	end
+
+	opts.on('-p', '--post', 'Automatically post the output') do
+		config[:upload] = true
+	end
+
+	opts.on('-c', '--config YAML_FILE', 'Configuration file') do |yaml_file|
+		config[:yaml_file] = yaml_file
+	end
+end.parse!
+
+
+['PUSHOVER_USER', 'PUSHOVER_TOKEN', 'LFGSS_TOKEN'].reject do |k|
+	ENV.key? k
+end.tap do |missing|
+	if missing.any?
+		warn "Missing environment variables: #{missing}"
+		exit 1
+	end
+end if config[:upload]
+
+flawless = LfgssPhotoPoll.new(**config).process_posts
+exit flawless ? 0 : 1
