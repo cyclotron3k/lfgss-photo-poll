@@ -7,7 +7,7 @@ config = {
 	rewind:    false,
 	no_save:   false,
 	upload:    false,
-	yaml_file: nil,
+	# yaml_file: nil,
 }
 
 OptionParser.new do |opts|

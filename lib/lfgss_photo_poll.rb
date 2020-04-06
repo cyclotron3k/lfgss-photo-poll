@@ -216,7 +216,7 @@ class LfgssPhotoPoll
 	end
 
 	def pushover(message, priority: 0)
-		raise if Pushover::Message.create(
+		raise if Pushover::Message.new(
 			user: @pushover_user,
 			token: @pushover_token,
 			message: message,
