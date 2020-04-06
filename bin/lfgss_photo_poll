@@ -22,7 +22,7 @@ OptionParser.new do |opts|
 		config[:rewind] = true
 	end
 
-	opts.on('-n', '--save', 'Don\'t save any changes') do
+	opts.on('-n', '--no-save', 'Don\'t save any changes') do
 		config[:no_save] = true
 	end
 
