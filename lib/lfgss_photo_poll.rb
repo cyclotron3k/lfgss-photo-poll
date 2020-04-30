@@ -196,7 +196,7 @@ class LfgssPhotoPoll
 
 			pushover 'Message posted to LFGSS ok'
 
-			puts "\e[33mDone"
+			puts "\e[33mDone\e[0m"
 
 		end
 
